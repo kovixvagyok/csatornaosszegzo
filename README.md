@@ -1,6 +1,6 @@
 # MI EZ?
 
-🇭🇺 [Magyar](#magyar) · 🇬🇧 [English](#english)
+🇭🇺 [Magyar](#magyar) · 🇺🇸 [English](#english)
 
 
 
