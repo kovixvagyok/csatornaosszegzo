@@ -2,7 +2,7 @@
 
 🇭🇺 [Magyar](#magyar) · 🇺🇸 [English](#english)
 
-
+![alt text](https://i.imgur.com/elMilnL.png)
 
 ---
 
