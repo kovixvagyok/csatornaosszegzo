@@ -98,12 +98,16 @@ async function load(c){
     const q=`startDate=${RG.s}&endDate=${RG.e}&ids=channel==MINE`;
     const A='https://youtubeanalytics.googleapis.com/v2/reports?'+q;
     const m='views,estimatedMinutesWatched,subscribersGained,subscribersLost';
-    let rep;
-    try{rep=await api(A+`&currency=HUF&metrics=${m},estimatedRevenue&dimensions=day&sort=day`,c.token);c.hasRev=true}
-    catch(e){rep=await api(A+`&metrics=${m}&dimensions=day&sort=day`,c.token);c.hasRev=false}
-    c.daily=rep.rows.map(r=>({d:r[0],v:r[1],h:r[2]/60,n:r[3]-r[4],r:c.hasRev?r[5]:0}));
+    // A bevételt külön kérjük le: az késik a legjobban, és ha egy lekérdezésben van, megvághatja a többi adat legfrissebb napjait is.
+    const rep=await api(A+`&metrics=${m}&dimensions=day&sort=day`,c.token);
+    const rv={};
+    try{
+      const rr=await api(A+'&currency=HUF&metrics=estimatedRevenue&dimensions=day&sort=day',c.token);
+      rr.rows.forEach(r=>rv[r[0]]=r[1]);c.hasRev=true;
+    }catch(e){c.hasRev=false}
+    c.daily=rep.rows.map(r=>({d:r[0],v:r[1],h:r[2]/60,n:r[3]-r[4],r:rv[r[0]]||0}));
     if(RG.month)c.daily=monthly(c.daily);
-    c.views=sum(rep.rows,1);c.hours=sum(rep.rows,2)/60;c.net=sum(rep.rows,3)-sum(rep.rows,4);c.rev=c.hasRev?sum(rep.rows,5):null;
+    c.views=sum(rep.rows,1);c.hours=sum(rep.rows,2)/60;c.net=sum(rep.rows,3)-sum(rep.rows,4);c.rev=c.hasRev?Object.values(rv).reduce((a,x)=>a+x,0):null;
     try{
       const t=await api(A+'&metrics=views&dimensions=video&sort=-views&maxResults=3',c.token);
       const ids=t.rows.map(r=>r[0]).join(',');
