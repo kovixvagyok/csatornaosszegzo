@@ -76,6 +76,21 @@ const DEFAULT_CID='914863107657-8mv2qbphi8k70v0rpovcb02nlmcfg7b7.apps.googleuser
 let cid=localStorage.getItem('kv_cid')||DEFAULT_CID;
 let chans=JSON.parse(sessionStorage.getItem('kv_ch')||'[]');
 let tc=null,sel=null,met='v',hide=false,vsort='p',gran='napi';const lim={v:12,s:12,l:12};
+let snaps={};try{snaps=JSON.parse(localStorage.getItem('kv_snap')||'{}')}catch(e){}
+function snap(c){
+  if(!c.id||!c.tv)return;
+  const a=snaps[c.id]||(snaps[c.id]=[]),now=Date.now(),last=a[a.length-1];
+  if(!last||now-last[0]>=10*60*1000||(last[1]!==c.tv&&now-last[0]>=60*1000))a.push([now,c.tv]);
+  while(a.length&&now-a[0][0]>48*36e5)a.shift();
+  try{localStorage.setItem('kv_snap',JSON.stringify(snaps))}catch(e){}
+}
+const tvTxt=c=>c.tv?c.tv.toLocaleString('hu-HU'):'–';
+function tvd(c){
+  const a=snaps[c.id]||[],now=Date.now(),s0=a.find(x=>now-x[0]<=24*36e5);
+  if(!s0||!c.tv||now-s0[0]<30*60*1000)return 'Az élő változás a böngésző mérései alapján jelenik meg, ha az oldal egy ideje nyitva van.';
+  const h=(now-s0[0])/36e5;
+  return '+'+(c.tv-s0[1]).toLocaleString('hu-HU')+' az utolsó '+(h<1?Math.round(h*60)+' percben':h.toFixed(1).replace('.',',')+' órában');
+}
 let ovr={};try{ovr=JSON.parse(localStorage.getItem('kv_ovr')||'{}')}catch(e){}
 try{hide=localStorage.getItem('kv_hide')==='1'}catch(e){}
 const MN={v:'Megtekintések',h:'Nézési idő (óra)',n:'Nettó új feliratkozó',r:'Becsült bevétel'};
@@ -93,7 +108,7 @@ async function load(c){
   try{
     const me=await api('https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,contentDetails&mine=true',c.token);
     const it=me.items[0];
-    c.id=it.id;c.title=it.snippet.title;const th=it.snippet.thumbnails;c.thumb=(th.medium||th.default).url;c.subs=+it.statistics.subscriberCount;c.up=it.contentDetails.relatedPlaylists.uploads;
+    c.id=it.id;c.title=it.snippet.title;const th=it.snippet.thumbnails;c.thumb=(th.medium||th.default).url;c.subs=+it.statistics.subscriberCount;c.up=it.contentDetails.relatedPlaylists.uploads;c.tv=+it.statistics.viewCount;snap(c);
     c.pub=it.snippet.publishedAt;const RG=rng(c);gran=RG.month?'havi':'napi';
     const q=`startDate=${RG.s}&endDate=${RG.e}&ids=channel==MINE`;
     const A='https://youtubeanalytics.googleapis.com/v2/reports?'+q;
@@ -127,8 +142,10 @@ async function refresh(){
 async function liveSubs(){ // csak a feliratkozószám, percenként
   await Promise.all(chans.map(async c=>{try{
     const r=await api('https://www.googleapis.com/youtube/v3/channels?part=statistics&mine=true',c.token);
-    c.subs=+r.items[0].statistics.subscriberCount}catch(e){}}));
+    c.subs=+r.items[0].statistics.subscriberCount;c.tv=+r.items[0].statistics.viewCount;snap(c)}catch(e){}}));
   document.querySelectorAll('[data-live]').forEach(el=>{const c=chans[+el.dataset.live];if(c)el.textContent=c.subs.toLocaleString('hu-HU')});
+  document.querySelectorAll('[data-tv]').forEach(el=>{const c=chans[+el.dataset.tv];if(c)el.textContent=tvTxt(c)});
+  document.querySelectorAll('[data-tvd]').forEach(el=>{const c=chans[+el.dataset.tvd];if(c)el.textContent=tvd(c)});
   const t=$('#tsubs');if(t)t.textContent=(sel!=null&&chans[sel]?[chans[sel]]:chans).reduce((a,c)=>a+(c.subs||0),0).toLocaleString('hu-HU');
 }
 
@@ -262,6 +279,8 @@ function render(){
       <h3><img src="${esc(c.thumb||'')}" referrerpolicy="no-referrer" alt="" data-i="${esc((c.title||'?')[0])}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'av',textContent:this.dataset.i}))">${esc(c.title||'Betöltés…')}</h3>
       <div class="live" data-live="${i}">${(c.subs||0).toLocaleString('hu-HU')}</div><div class="mut">feliratkozó (kerekített, percenként frissül)</div><a class="lk" href="https://studio.youtube.com/channel/${c.id}/analytics/tab-overview/period-default" target="_blank" rel="noopener" onclick="event.stopPropagation()">Pontos érték a Studióban</a>
       <div style="margin-top:12px">
+        <div class="row"><span class="mut">Összes megtekintés (élő)</span><b data-tv="${i}">${tvTxt(c)}</b></div>
+        <div class="mut" data-tvd="${i}" style="font-size:12px;padding:0 0 8px">${tvd(c)}</div>
         <div class="row"><span class="mut">Megtekintések</span><b>${fmt(c.views)}</b></div>
         <div class="row"><span class="mut">Nézési idő (óra)</span><b>${fmt(c.hours)}</b></div>
         <div class="row"><span class="mut">Nettó új feliratkozó</span><b>${c.net>0?'+':''}${fmt(c.net)}</b></div>
